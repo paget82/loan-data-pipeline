@@ -1,0 +1,74 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  pipeline-and-dbt-tests:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: dwh_user
+          POSTGRES_PASSWORD: dwh_password
+          POSTGRES_DB: loan_dwh
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U dwh_user"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Python dependencies
+        run: pip install -r requirements.txt
+
+      - name: Generate synthetic data
+        run: python generator/generate_data.py
+
+      - name: Load raw data into Postgres
+        env:
+          DB_HOST: localhost
+          DB_USER: dwh_user
+          DB_PASSWORD: dwh_password
+          DB_NAME: loan_dwh
+        run: python extract/extract_to_raw.py
+
+      - name: Set up dbt profile
+        working-directory: dbt_project
+        run: cp profiles.yml.example profiles.yml
+
+      - name: dbt deps
+        working-directory: dbt_project
+        run: dbt deps
+
+      - name: dbt run
+        working-directory: dbt_project
+        run: dbt run
+
+      - name: dbt test
+        working-directory: dbt_project
+        run: dbt test
+
+      - name: Validate Airflow DAG syntax
+        run: python -m py_compile dags/loan_pipeline_dag.py
+
+      - name: Lint Dockerfile.airflow
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: Dockerfile.airflow
+          failure-threshold: error

@@ -1,0 +1,26 @@
+FROM apache/airflow:2.9.3
+
+# Separate virtual environment for dbt and the pipeline scripts (generator, extract).
+# REASON: dbt-core requires sqlalchemy==2.0.31, which conflicts with the SQLAlchemy
+# version used internally by Airflow itself. Installing packages directly into the
+# Airflow environment (e.g. via _PIP_ADDITIONAL_REQUIREMENTS) breaks the Airflow
+# webserver/scheduler (ArgumentError on TaskInstance.dag_model).
+# Solution: a separate venv that never conflicts with anything from Airflow.
+
+USER root
+RUN mkdir -p /opt/dbt_venv && chown -R airflow:root /opt/dbt_venv
+
+USER airflow
+
+RUN python3 -m venv /opt/dbt_venv && \
+    /opt/dbt_venv/bin/pip install --no-cache-dir --upgrade pip && \
+    /opt/dbt_venv/bin/pip install --no-cache-dir \
+        faker==26.0.0 \
+        numpy==1.26.4 \
+        pandas==2.2.2 \
+        sqlalchemy==2.0.31 \
+        psycopg2-binary==2.9.9 \
+        pyarrow==16.1.0 \
+        python-dotenv==1.0.1 \
+        dbt-core==1.8.2 \
+        dbt-postgres==1.8.2

@@ -1,0 +1,21 @@
+# Python
+venv/
+__pycache__/
+*.pyc
+
+# Data (generated locally, not committed to git)
+data/raw/*.csv
+
+# Airflow logs (generated at runtime, mounted via docker-compose volume)
+logs/*
+!logs/.gitkeep
+
+# dbt
+dbt_project/target/
+dbt_project/dbt_packages/
+dbt_project/logs/
+dbt_project/profiles.yml
+dbt_project/.user.yml
+
+# env
+.env

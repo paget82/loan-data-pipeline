@@ -1,0 +1,48 @@
+version: 2
+
+models:
+  - name: dim_client
+    columns:
+      - name: client_id
+        tests:
+          - unique
+          - not_null
+      - name: credit_score
+        tests:
+          - dbt_utils.accepted_range:
+              min_value: 300
+              max_value: 900
+
+  - name: dim_loan
+    columns:
+      - name: loan_id
+        tests:
+          - unique
+          - not_null
+      - name: client_id
+        tests:
+          - not_null
+          - relationships:
+              to: ref('dim_client')
+              field: client_id
+      - name: status
+        tests:
+          - accepted_values:
+              values: ['active', 'paid_off', 'defaulted', 'delinquent']
+
+  - name: fact_transactions
+    columns:
+      - name: transaction_id
+        tests:
+          - unique
+          - not_null
+      - name: loan_id
+        tests:
+          - not_null
+          - relationships:
+              to: ref('dim_loan')
+              field: loan_id
+      - name: amount
+        tests:
+          - dbt_utils.accepted_range:
+              min_value: 0

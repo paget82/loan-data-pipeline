@@ -1,0 +1,23 @@
+with clients as (
+
+    select * from {{ ref('stg_clients') }}
+
+)
+
+select
+    client_id,
+    full_name,
+    birth_date,
+    date_part('year', age(current_date, birth_date::date))::int as age,
+    city,
+    monthly_income,
+    credit_score,
+    signup_date,
+    case
+        when credit_score >= 750 then 'excellent'
+        when credit_score >= 650 then 'good'
+        when credit_score >= 550 then 'fair'
+        else 'poor'
+    end as credit_tier
+
+from clients

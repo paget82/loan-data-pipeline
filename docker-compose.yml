@@ -1,0 +1,109 @@
+x-airflow-common: &airflow-common
+  build:
+    context: .
+    dockerfile: Dockerfile.airflow
+  environment:
+    AIRFLOW__CORE__EXECUTOR: LocalExecutor
+    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@airflow-postgres/airflow
+    AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+    AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "true"
+    # Longer timeout and fewer workers -- the webserver needs more time
+    # to start up on a slower/loaded machine
+    AIRFLOW__WEBSERVER__WEB_SERVER_MASTER_TIMEOUT: "300"
+    AIRFLOW__WEBSERVER__WORKERS: "2"
+    # Variables used by our scripts and the dbt profile inside the container
+    DB_HOST: postgres
+    DBT_HOST: postgres
+    DBT_PROFILES_DIR: /opt/airflow/project/dbt_project
+  volumes:
+    - ./dags:/opt/airflow/dags
+    - ./logs:/opt/airflow/logs
+    - ./generator:/opt/airflow/project/generator
+    - ./extract:/opt/airflow/project/extract
+    - ./dbt_project:/opt/airflow/project/dbt_project
+    - ./data:/opt/airflow/project/data
+  depends_on:
+    - airflow-postgres
+    - postgres
+
+services:
+  # --- Data warehouse (DWH) for the pipeline itself ---
+  postgres:
+    image: postgres:16
+    container_name: loan_dwh
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: dwh_user
+      POSTGRES_PASSWORD: dwh_password
+      POSTGRES_DB: loan_dwh
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+
+  pgadmin:
+    image: dpage/pgadmin4
+    container_name: loan_pgadmin
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@example.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+    ports:
+      - "5050:80"
+    depends_on:
+      - postgres
+
+  # --- Metadata DB for Airflow (separate from the DWH so data doesn't mix) ---
+  airflow-postgres:
+    image: postgres:16
+    container_name: airflow_metadata_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: airflow
+      POSTGRES_DB: airflow
+    volumes:
+      - airflow_pg_data:/var/lib/postgresql/data
+
+  # --- One-off initialization of the Airflow DB + admin user ---
+  airflow-init:
+    <<: *airflow-common
+    container_name: airflow_init
+    entrypoint: /bin/bash
+    command:
+      - -c
+      - |
+        airflow db upgrade &&
+        airflow users create \
+          --username admin \
+          --password admin \
+          --firstname Admin \
+          --lastname User \
+          --role Admin \
+          --email admin@example.com || true
+
+  airflow-webserver:
+    <<: *airflow-common
+    container_name: airflow_webserver
+    command: webserver
+    ports:
+      - "8090:8080"
+    depends_on:
+      - airflow-init
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  airflow-scheduler:
+    <<: *airflow-common
+    container_name: airflow_scheduler
+    command: scheduler
+    depends_on:
+      - airflow-init
+
+
+volumes:
+  pg_data:
+  airflow_pg_data:
