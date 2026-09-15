@@ -185,7 +185,7 @@ which:
 
 This means a broken model, a failing data quality test, or a syntax error
 in the DAG is caught automatically on every commit — before it could ever
-reach the scheduled Airflow run in Phase 2. Replace `YOUR_USERNAME` in the
+reach the scheduled Airflow run in Phase 2. Replace `paget82` in the
 badge URL at the top of this file with your actual GitHub username/org
 once the repo is pushed, so the badge renders correctly.
 
