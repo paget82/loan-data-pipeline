@@ -7,3 +7,4 @@ sources:
       - name: clients
       - name: loans
       - name: transactions
+      - name: exchange_rates

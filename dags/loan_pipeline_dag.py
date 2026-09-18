@@ -2,11 +2,14 @@
 DAG orchestrating the loan data pipeline.
 
 Runs the full batch flow daily:
-  1. generate_data   -> generates new synthetic CSV data
-  2. extract_to_raw  -> loads the CSVs into the raw schema in PostgreSQL
-  3. dbt_deps        -> installs dbt package dependencies (dbt_utils)
-  4. dbt_run         -> builds the staging and mart models (dbt)
-  5. dbt_test        -> runs data quality tests
+  1a. generate_data          -> generates new synthetic CSV data
+  1b. extract_exchange_rates -> pulls the daily EUR/CZK rate from the
+                                 public CNB REST API (runs in parallel
+                                 with 1a/2, independent external source)
+  2.  extract_to_raw         -> loads the CSVs into the raw schema in PostgreSQL
+  3.  dbt_deps               -> installs dbt package dependencies (dbt_utils)
+  4.  dbt_run                -> builds the staging and mart models (dbt)
+  5.  dbt_test               -> runs data quality tests
 
 The project is mounted into /opt/airflow/project (see docker-compose.yml).
 """
@@ -28,7 +31,7 @@ default_args = {
 
 with DAG(
     dag_id="loan_data_pipeline",
-    description="Batch pipeline: generate -> extract -> dbt transform -> test",
+    description="Batch pipeline: generate -> extract (incl. external REST API) -> dbt transform -> test",
     default_args=default_args,
     schedule_interval="@daily",
     start_date=datetime(2026, 1, 1),
@@ -46,6 +49,13 @@ with DAG(
         bash_command=f"cd {PROJECT_DIR} && {VENV_PYTHON} extract/extract_to_raw.py",
     )
 
+    # Independent external REST API source (CNB exchange rates) -- does
+    # not depend on generate_data, so it can run in parallel.
+    extract_exchange_rates = BashOperator(
+        task_id="extract_exchange_rates",
+        bash_command=f"cd {PROJECT_DIR} && {VENV_PYTHON} extract/extract_exchange_rates.py",
+    )
+
     dbt_deps = BashOperator(
         task_id="dbt_deps",
         bash_command=f"cd {PROJECT_DIR}/dbt_project && {VENV_DBT} deps",
@@ -61,4 +71,5 @@ with DAG(
         bash_command=f"cd {PROJECT_DIR}/dbt_project && {VENV_DBT} test",
     )
 
-    generate_data >> extract_to_raw >> dbt_deps >> dbt_run >> dbt_test
+    generate_data >> extract_to_raw
+    [extract_to_raw, extract_exchange_rates] >> dbt_deps >> dbt_run >> dbt_test

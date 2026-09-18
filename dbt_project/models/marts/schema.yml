@@ -29,6 +29,10 @@ models:
         tests:
           - accepted_values:
               values: ['active', 'paid_off', 'defaulted', 'delinquent']
+      - name: principal_amount_eur
+        tests:
+          - dbt_utils.accepted_range:
+              min_value: 0
 
   - name: fact_transactions
     columns:
@@ -46,3 +50,37 @@ models:
         tests:
           - dbt_utils.accepted_range:
               min_value: 0
+
+  - name: dim_exchange_rate
+    columns:
+      - name: currency_code
+        tests:
+          - unique
+          - not_null
+      - name: czk_per_unit
+        tests:
+          - dbt_utils.accepted_range:
+              min_value: 0
+
+  - name: bank_loan_flat
+    columns:
+      - name: id
+        tests:
+          - unique
+          - not_null
+      - name: member_id
+        tests:
+          - not_null
+      - name: loan_status
+        tests:
+          - accepted_values:
+              values: ['Fully Paid', 'Charged Off', 'Current']
+      - name: installment
+        tests:
+          - dbt_utils.accepted_range:
+              min_value: 0
+      - name: int_rate
+        tests:
+          - dbt_utils.accepted_range:
+              min_value: 0
+              max_value: 1

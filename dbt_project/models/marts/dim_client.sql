@@ -8,11 +8,17 @@ select
     client_id,
     full_name,
     birth_date,
-    date_part('year', age(current_date, birth_date::date))::int as age,
+    date_part('year', age(current_date, birth_date))::int as age,
     city,
     monthly_income,
     credit_score,
     signup_date,
+    address_state,
+    emp_length,
+    emp_title,
+    home_ownership,
+    verification_status,
+    total_acc,
     case
         when credit_score >= 750 then 'excellent'
         when credit_score >= 650 then 'good'

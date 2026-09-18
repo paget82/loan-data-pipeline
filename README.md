@@ -1,7 +1,7 @@
-# Loan Data Pipeline
-*Originally built as: Datová pipeline pro úvěrové transakce*
+# End-to-End Loan Data Pipeline
 
-[![CI](https://github.com/YOUR_USERNAME/loan-data-pipeline/actions/workflows/ci.yml/badge.svg)](https://github.com/YOUR_USERNAME/loan-data-pipeline/actions/workflows/ci.yml)
+
+[![CI](https://github.com/paget82/loan-data-pipeline/actions/workflows/ci.yml/badge.svg)](https://github.com/paget82/loan-data-pipeline/actions/workflows/ci.yml)
 
 ## Problem
 A lending company's data team had no automated, production-style way to move
@@ -22,18 +22,20 @@ intervention, and Power BI connects directly to the mart layer for
 reporting.
 
 ## Tech Stack
-- Python (Faker, Pandas, SQLAlchemy)
+- Python (Faker, Pandas, SQLAlchemy, Requests)
 - PostgreSQL
 - dbt (dbt-core, dbt-postgres, dbt_utils)
 - Apache Airflow (LocalExecutor)
+- External REST API integration (Czech National Bank exchange rates)
 - Docker / Docker Compose
 - GitHub Actions (CI)
 - Power BI
 
 ## Dataset
-- Source: synthetic data generated with Faker (no real customer data used)
+- Source: synthetic data generated with Faker (no real customer data used),
+  enriched with live daily exchange rates from the public CNB REST API
 - Tables: `clients` (~5,000 rows), `loans` (~8,000 rows), `transactions`
-  (~60,000 rows)
+  (~60,000 rows), `exchange_rates` (~30 currencies, refreshed daily)
 - Intentionally includes "dirty" data — missing values, duplicates — to
   mirror real-world source system behavior
 
@@ -42,13 +44,18 @@ reporting.
    linked clients/loans/transactions data with intentional data quality
    issues (missing income, missing interest rates, duplicate transactions).
 2. **Extraction** – a Python script loads the raw CSVs into a `raw` schema
-   in PostgreSQL, with no transformation applied at this stage.
+   in PostgreSQL, with no transformation applied at this stage. In
+   parallel, a second extraction script calls the public **Czech National
+   Bank REST API** (`api.cnb.cz`, no API key required) to pull the daily
+   EUR/CZK exchange rate fixing.
 3. **Staging transformations (dbt)** – cleaning, deduplication, null
    handling, and explicit type casting, one model per source table
    (`stg_clients`, `stg_loans`, `stg_transactions`).
 4. **Dimensional modeling (dbt)** – staging models are transformed into a
    fact/dim mart layer: `dim_client` (with age and credit tier),
-   `dim_loan` (with term bucket), and `fact_transactions`.
+   `dim_loan` (with term bucket and principal amount converted to EUR
+   using the live exchange rate), `dim_exchange_rate`, and
+   `fact_transactions`.
 5. **Data quality testing (dbt)** – automated tests for uniqueness,
    not-null constraints, referential integrity between fact and dim
    tables, accepted value ranges, and accepted categorical values.
@@ -71,11 +78,20 @@ through the Airflow UI — every run shows exactly which step succeeded or
 failed, and automated data quality tests catch broken data before it
 reaches a dashboard. What used to be a manual, error-prone refresh process
 is now a repeatable, testable, and auditable pipeline that mirrors how a
-production data engineering workflow is structured.
+production data engineering workflow is structured. The EUR conversion fed
+by the live CNB exchange rate was validated end-to-end in Power BI —
+totals broken down by loan status show correctly scaled EUR figures
+alongside the original CZK amounts.
 
 ## Screenshots / Demo
-![Airflow DAG - successful run](screenshots/airflow_dag_success.png)
-![Power BI - source tables](screenshots/powerbi_dwh_tables.png)
+<p align="center">
+  <img src="screenshots/airflow_dag_success.png" alt="Airflow - success" width="600">
+</p>
+
+<p align="center">
+  <img src="screenshots/powerbi_dwh_tables.png" alt="Power BI - source tables" width="600">
+</p>
+
 
 ## How to run
 1. Install Python dependencies: `pip install -r requirements.txt`
@@ -93,11 +109,14 @@ See the sections below for a manual (non-Airflow) run and further details.
   data generator
 - [`extract/extract_to_raw.py`](extract/extract_to_raw.py) – raw data
   loader
+- [`extract/extract_exchange_rates.py`](extract/extract_exchange_rates.py)
+  – external REST API extractor (CNB exchange rates)
 - [`dbt_project/`](dbt_project/) – dbt staging and mart models, tests
 - [`dags/loan_pipeline_dag.py`](dags/loan_pipeline_dag.py) – Airflow DAG
 - [`docker-compose.yml`](docker-compose.yml) – full local infrastructure
 - [`Dockerfile.airflow`](Dockerfile.airflow) – custom Airflow image with
   isolated dbt environment
+- [`.github/workflows/ci.yml`](.github/workflows/ci.yml) – CI pipeline
 
 ## Business value
 The pipeline eliminates manual, error-prone data refreshes and replaces
@@ -111,25 +130,15 @@ directly to real production data sources.
 
 ## Architecture
 
-```
-Data generator (Python, Faker)
-        |
-        v
-Extraction & storage of raw data (CSV -> "raw" schema in PostgreSQL)
-        |
-        v
-Transformation (dbt staging models -- cleaning, deduplication)
-        |
-        v
-Data warehouse -- mart layer (dbt -- dim_client, dim_loan, fact_transactions)
-        |
-        v
-Visualization (Power BI dashboard)
-```
+<p align="center">
+  <img src="images/Architecture.png" alt="Architecture" width="600">
+</p>
 
-From Phase 2 onward, the whole flow above is orchestrated by Airflow on a
+
+The whole flow above is orchestrated by Airflow on a
 daily schedule:
-`generate_data -> extract_to_raw -> dbt_deps -> dbt_run -> dbt_test`.
+`generate_data -> extract_to_raw` and `extract_exchange_rates` (parallel)
+`-> dbt_deps -> dbt_run -> dbt_test`.
 
 ## Why a custom Dockerfile for Airflow (`Dockerfile.airflow`)
 
@@ -148,6 +157,7 @@ environment. The DAG calls `python`/`dbt` directly from this venv
 python generator/generate_data.py
 cp .env.example .env   # edit if you changed the default credentials
 python extract/extract_to_raw.py
+python extract/extract_exchange_rates.py
 
 cd dbt_project
 cp profiles.yml.example profiles.yml
@@ -156,12 +166,37 @@ dbt run
 dbt test
 ```
 
+## External REST API integration
+
+Alongside the synthetic clients/loans/transactions data, the pipeline
+pulls **real, live data from a public third-party REST API**: the daily
+currency exchange rate fixing published by the Czech National Bank (CNB).
+
+- Endpoint: `https://api.cnb.cz/cnbapi/exrates/daily?lang=EN`
+- No API key or authentication required
+- Updated once per working day (weekends/holidays return the last valid
+  rate)
+- Script: [`extract/extract_exchange_rates.py`](extract/extract_exchange_rates.py)
+- Lands in `raw.exchange_rates`, cleaned in `stg_exchange_rates`, exposed
+  as `dim_exchange_rate`, and used to convert `dim_loan.principal_amount`
+  into `principal_amount_eur`
+
+The conversion uses a scalar subquery rather than a join, so a temporarily
+unavailable API (e.g. the CNB service is down) never drops loan rows from
+`dim_loan` — it simply yields a null EUR amount for that run, and normal
+CZK reporting is unaffected.
+
+In the Airflow DAG this runs as an independent `extract_exchange_rates`
+task in parallel with `extract_to_raw`, since it doesn't depend on the
+synthetic data generation step — both must finish before `dbt_deps` runs.
+
 ## Data model (mart layer)
 
 | Table | Type | Description |
 |---|---|---|
 | `dim_client` | dimension | clients, credit tier, age |
-| `dim_loan` | dimension | loans, term bucket, status |
+| `dim_loan` | dimension | loans, term bucket, status, EUR-converted amount |
+| `dim_exchange_rate` | dimension | daily currency fixing from the CNB REST API |
 | `fact_transactions` | fact | transactions linked to client and loan |
 
 ## Data quality
@@ -185,12 +220,6 @@ which:
 
 This means a broken model, a failing data quality test, or a syntax error
 in the DAG is caught automatically on every commit — before it could ever
-reach the scheduled Airflow run in Phase 2. Replace `paget82` in the
-badge URL at the top of this file with your actual GitHub username/org
-once the repo is pushed, so the badge renders correctly.
+reach the scheduled Airflow run in Phase 2. 
 
-## Planned next phases
 
-- Phase 3 – a Kafka streaming branch (producer/consumer simulating new
-  transactions in real time)
-- Phase 4 – extended dimensional model, Terraform for cloud infrastructure

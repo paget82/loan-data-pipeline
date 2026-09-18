@@ -1,9 +1,11 @@
-# Skopíruj tento súbor ako ~/.dbt/profiles.yml (alebo nastav DBT_PROFILES_DIR)
-# a uprav hodnoty podľa .env, ak si ich menil.
+# Copy this file as ~/.dbt/profiles.yml (or set DBT_PROFILES_DIR)
+# and adjust the values according to .env if you changed them.
 #
-# Host je konfigurovateľný cez premennú prostredia DBT_HOST:
-#   - lokálne (mimo Dockeru)         -> DBT_HOST nenastavené, použije sa "localhost"
-#   - vo vnútri Airflow kontajnera    -> DBT_HOST=postgres (názov služby v docker-compose)
+# The host can be configured via the DBT_HOST environment variable:
+# - locally (outside Docker)          -> DBT_HOST not set, "localhost" will be used
+# - inside the Airflow container      -> DBT_HOST=postgres (the service name in docker-compose)
+
+
 
 loan_pipeline:
   target: dev

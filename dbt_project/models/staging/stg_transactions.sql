@@ -10,7 +10,7 @@ deduplicated as (
     select distinct on (loan_id, transaction_date, amount, transaction_type)
         transaction_id,
         loan_id,
-        transaction_date,
+        transaction_date::date as transaction_date,
         amount,
         transaction_type
     from source

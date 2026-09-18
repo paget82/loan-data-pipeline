@@ -16,12 +16,18 @@ cleaned as (
     select
         client_id,
         trim(full_name)                            as full_name,
-        birth_date,
+        birth_date::date                            as birth_date,
         trim(city)                                  as city,
         -- replace missing income with the median instead of dropping the row
         coalesce(monthly_income, median_income.med) as monthly_income,
         credit_score,
-        signup_date
+        signup_date::date                           as signup_date,
+        address_state,
+        emp_length,
+        emp_title,
+        home_ownership,
+        verification_status,
+        total_acc
 
     from deduplicated
     cross join (

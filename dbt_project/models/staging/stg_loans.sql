@@ -13,9 +13,13 @@ cleaned as (
         -- flag a missing interest rate instead of silently replacing it
         interest_rate,
         (interest_rate is null)     as is_interest_rate_missing,
-        origination_date,
+        origination_date::date              as origination_date,
         term_months,
-        status
+        status,
+        application_type,
+        purpose,
+        last_credit_pull_date::date         as last_credit_pull_date,
+        dti
 
     from source
     where principal_amount > 0  -- basic sanity check

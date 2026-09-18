@@ -19,3 +19,5 @@ dbt_project/.user.yml
 
 # env
 .env
+# pbi
+pbi_report.pbix
