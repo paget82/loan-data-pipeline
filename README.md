@@ -1,7 +1,7 @@
 # Loan Data Pipeline
-*Originally built as: Datová pipeline pro úvěrové transakce*
 
-[![CI](https://github.com/YOUR_USERNAME/loan-data-pipeline/actions/workflows/ci.yml/badge.svg)](https://github.com/YOUR_USERNAME/loan-data-pipeline/actions/workflows/ci.yml)
+
+[![CI](https://github.com/paget82/loan-data-pipeline/actions/workflows/ci.yml/badge.svg)](https://github.com/paget82/loan-data-pipeline/actions/workflows/ci.yml)
 
 ## Problem
 A lending company's data team had no automated, production-style way to move
