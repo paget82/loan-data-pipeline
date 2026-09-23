@@ -6,7 +6,7 @@ with transactions as (
 
 loans as (
 
-    select loan_id, client_id from {{ ref('dim_loan') }}
+    select loan_id, client_id from {{ ref('stg_loans') }}
 
 )
 

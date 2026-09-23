@@ -2,7 +2,7 @@
 
 
 [![CI](https://github.com/paget82/loan-data-pipeline/actions/workflows/ci.yml/badge.svg)](https://github.com/paget82/loan-data-pipeline/actions/workflows/ci.yml)
-[![CI](https://github.com/paget82/loan-data-pipeline/actions/workflows/ci.yml/badge.svg)](https://github.com/paget82/loan-data-pipeline/actions/workflows/ci.yml)
+
 
 ## Problem
 A lending company's data team had no automated, production-style way to move
@@ -27,16 +27,18 @@ reporting.
 - PostgreSQL
 - dbt (dbt-core, dbt-postgres, dbt_utils)
 - Apache Airflow (LocalExecutor)
-- External REST API integration (Czech National Bank exchange rates)
+- External REST API integration (Frankfurter USD exchange rates)
 - Docker / Docker Compose
 - GitHub Actions (CI)
 - Power BI
 
 ## Dataset
-- Source: synthetic data generated with Faker (no real customer data used),
-  enriched with live daily exchange rates from the public CNB REST API
-- Tables: `clients` (~5,000 rows), `loans` (~8,000 rows), `transactions`
-  (~60,000 rows), `exchange_rates` (~30 currencies, refreshed daily)
+- Source: synthetic US-market data generated with Faker (`en_US` locale --
+  no real customer data used), enriched with live daily USD-based
+  exchange rates from the public Frankfurter REST API
+- Tables: `clients` (~5,000 rows, US cities/states), `loans` (~8,000 rows,
+  USD amounts), `transactions` (~60,000 rows, USD amounts),
+  `exchange_rates` (~30 currencies vs. USD, refreshed daily)
 - Intentionally includes "dirty" data — missing values, duplicates — to
   mirror real-world source system behavior
 
@@ -46,15 +48,15 @@ reporting.
    issues (missing income, missing interest rates, duplicate transactions).
 2. **Extraction** – a Python script loads the raw CSVs into a `raw` schema
    in PostgreSQL, with no transformation applied at this stage. In
-   parallel, a second extraction script calls the public **Czech National
-   Bank REST API** (`api.cnb.cz`, no API key required) to pull the daily
-   EUR/CZK exchange rate fixing.
+   parallel, a second extraction script calls the public **Frankfurter
+   REST API** (`api.frankfurter.app`, no API key required) to pull the
+   daily USD-based exchange rate fixing.
 3. **Staging transformations (dbt)** – cleaning, deduplication, null
    handling, and explicit type casting, one model per source table
    (`stg_clients`, `stg_loans`, `stg_transactions`).
 4. **Dimensional modeling (dbt)** – staging models are transformed into a
    fact/dim mart layer: `dim_client` (with age and credit tier),
-   `dim_loan` (with term bucket and principal amount converted to EUR
+   `dim_loan` (with term bucket and USD principal amount converted to EUR
    using the live exchange rate), `dim_exchange_rate`, and
    `fact_transactions`.
 5. **Data quality testing (dbt)** – automated tests for uniqueness,
@@ -80,9 +82,9 @@ failed, and automated data quality tests catch broken data before it
 reaches a dashboard. What used to be a manual, error-prone refresh process
 is now a repeatable, testable, and auditable pipeline that mirrors how a
 production data engineering workflow is structured. The EUR conversion fed
-by the live CNB exchange rate was validated end-to-end in Power BI —
-totals broken down by loan status show correctly scaled EUR figures
-alongside the original CZK amounts.
+by the live Frankfurter exchange rate was validated end-to-end in Power BI
+— totals broken down by loan status show correctly scaled EUR figures
+alongside the original USD amounts.
 
 ## Screenshots / Demo
 <p align="center">
@@ -111,7 +113,7 @@ See the sections below for a manual (non-Airflow) run and further details.
 - [`extract/extract_to_raw.py`](extract/extract_to_raw.py) – raw data
   loader
 - [`extract/extract_exchange_rates.py`](extract/extract_exchange_rates.py)
-  – external REST API extractor (CNB exchange rates)
+  – external REST API extractor (Frankfurter USD exchange rates)
 - [`dbt_project/`](dbt_project/) – dbt staging and mart models, tests
 - [`dags/loan_pipeline_dag.py`](dags/loan_pipeline_dag.py) – Airflow DAG
 - [`docker-compose.yml`](docker-compose.yml) – full local infrastructure
@@ -171,21 +173,22 @@ dbt test
 
 Alongside the synthetic clients/loans/transactions data, the pipeline
 pulls **real, live data from a public third-party REST API**: the daily
-currency exchange rate fixing published by the Czech National Bank (CNB).
+USD-based currency exchange rate fixing published by Frankfurter (backed
+by European Central Bank reference rates).
 
-- Endpoint: `https://api.cnb.cz/cnbapi/exrates/daily?lang=EN`
+- Endpoint: `https://api.frankfurter.app/latest?from=USD`
 - No API key or authentication required
-- Updated once per working day (weekends/holidays return the last valid
-  rate)
+- Updated once per ECB business day (weekends/holidays return the last
+  valid rate)
 - Script: [`extract/extract_exchange_rates.py`](extract/extract_exchange_rates.py)
 - Lands in `raw.exchange_rates`, cleaned in `stg_exchange_rates`, exposed
   as `dim_exchange_rate`, and used to convert `dim_loan.principal_amount`
   into `principal_amount_eur`
 
 The conversion uses a scalar subquery rather than a join, so a temporarily
-unavailable API (e.g. the CNB service is down) never drops loan rows from
-`dim_loan` — it simply yields a null EUR amount for that run, and normal
-CZK reporting is unaffected.
+unavailable API (e.g. the Frankfurter service is down) never drops loan
+rows from `dim_loan` — it simply yields a null EUR amount for that run,
+and normal USD reporting is unaffected.
 
 In the Airflow DAG this runs as an independent `extract_exchange_rates`
 task in parallel with `extract_to_raw`, since it doesn't depend on the
@@ -196,8 +199,8 @@ synthetic data generation step — both must finish before `dbt_deps` runs.
 | Table | Type | Description |
 |---|---|---|
 | `dim_client` | dimension | clients, credit tier, age |
-| `dim_loan` | dimension | loans, term bucket, status, EUR-converted amount |
-| `dim_exchange_rate` | dimension | daily currency fixing from the CNB REST API |
+| `dim_loan` | dimension | loans, term bucket, status, USD amount converted to EUR |
+| `dim_exchange_rate` | dimension | daily USD-based currency fixing from the Frankfurter REST API |
 | `fact_transactions` | fact | transactions linked to client and loan |
 
 ## Data quality

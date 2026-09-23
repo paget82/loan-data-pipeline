@@ -1,16 +1,17 @@
 """
-Extracts the daily currency exchange rate fixing from the public Czech
-National Bank (CNB) REST API and loads it into the raw.exchange_rates
-table in PostgreSQL.
+Extracts the daily USD-based currency exchange rate fixing from the public
+Frankfurter REST API and loads it into the raw.exchange_rates table in
+PostgreSQL.
 
 This is a real, free, no-auth-required external REST API integration
 (as opposed to the synthetic Faker-generated clients/loans/transactions
 data) -- it demonstrates pulling and landing data from a live third-party
 source as part of the pipeline.
 
-API docs: https://api.cnb.cz (Swagger UI at https://api.cnb.cz/cnbapi/swagger-ui.html)
-Endpoint used: GET https://api.cnb.cz/cnbapi/exrates/daily?lang=EN
-On weekends/holidays the API returns the last valid published rate.
+API docs: https://www.frankfurter.app/docs/
+Endpoint used: GET https://api.frankfurter.app/latest?from=USD
+Rates are published on ECB business days; on weekends/holidays the API
+returns the last valid published rate.
 
 Run:
     python extract/extract_exchange_rates.py
@@ -26,7 +27,7 @@ from sqlalchemy import create_engine, text
 
 load_dotenv()
 
-CNB_API_URL = "https://api.cnb.cz/cnbapi/exrates/daily"
+FRANKFURTER_API_URL = "https://api.frankfurter.app/latest"
 MAX_RETRIES = 3
 BACKOFF_SECONDS = 2  # doubles after each retry: 2s, 4s, 8s
 
@@ -40,7 +41,8 @@ CONNECTION_STRING = f"postgresql+psycopg2://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{D
 
 
 def fetch_exchange_rates() -> pd.DataFrame:
-    """Call the CNB REST API and return the daily fixing as a DataFrame.
+    """Call the Frankfurter REST API and return the daily USD-based fixing
+    as a DataFrame.
 
     Retries with exponential backoff on network errors, timeouts, and
     5xx/429 responses -- a real external API can be temporarily
@@ -51,27 +53,30 @@ def fetch_exchange_rates() -> pd.DataFrame:
 
     for attempt in range(1, MAX_RETRIES + 1):
         try:
-            response = requests.get(CNB_API_URL, params={"lang": "EN"}, timeout=15)
+            response = requests.get(
+                FRANKFURTER_API_URL, params={"from": "USD"}, timeout=15
+            )
 
             if response.status_code == 429 or response.status_code >= 500:
                 raise requests.exceptions.HTTPError(
-                    f"CNB API returned {response.status_code}, retrying..."
+                    f"Frankfurter API returned {response.status_code}, retrying..."
                 )
 
             response.raise_for_status()
 
             payload = response.json()
-            rates = payload.get("rates", [])
+            rates = payload.get("rates", {})
             if not rates:
-                raise RuntimeError("CNB API returned no exchange rate data.")
+                raise RuntimeError("Frankfurter API returned no exchange rate data.")
 
-            df = pd.DataFrame(rates)
-            df = df.rename(
-                columns={"currencyCode": "currency_code", "validFor": "valid_for"}
+            df = pd.DataFrame(
+                [
+                    {"currency_code": code, "rate_per_usd": rate}
+                    for code, rate in rates.items()
+                ]
             )
-            return df[
-                ["valid_for", "country", "currency", "currency_code", "amount", "rate"]
-            ]
+            df["valid_for"] = payload["date"]
+            return df[["valid_for", "currency_code", "rate_per_usd"]]
 
         except (
             requests.exceptions.RequestException,
@@ -87,7 +92,7 @@ def fetch_exchange_rates() -> pd.DataFrame:
                 time.sleep(wait)
 
     raise RuntimeError(
-        f"CNB API request failed after {MAX_RETRIES} attempts: {last_error}"
+        f"Frankfurter API request failed after {MAX_RETRIES} attempts: {last_error}"
     )
 
 
@@ -95,8 +100,6 @@ def load_to_raw(df: pd.DataFrame):
     engine = create_engine(CONNECTION_STRING)
     with engine.begin() as conn:
         conn.execute(text("CREATE SCHEMA IF NOT EXISTS raw;"))
-        # Explicit DROP ... CASCADE so the run doesn't fail if dbt staging
-        # views from a previous run depend on this table.
         conn.execute(text("DROP TABLE IF EXISTS raw.exchange_rates CASCADE;"))
 
     df.to_sql(
@@ -109,7 +112,7 @@ def load_to_raw(df: pd.DataFrame):
 
 
 def main():
-    print("Fetching exchange rates from the CNB REST API...")
+    print("Fetching exchange rates from the Frankfurter REST API (USD base)...")
     df = fetch_exchange_rates()
     print(f"  fetched {len(df)} currencies, valid for {df['valid_for'].iloc[0]}")
 

@@ -48,7 +48,7 @@ jobs:
           DB_NAME: loan_dwh
         run: python extract/extract_to_raw.py
 
-      - name: Extract exchange rates from CNB REST API
+      - name: Extract exchange rates from Frankfurter REST API
         env:
           DB_HOST: localhost
           DB_USER: dwh_user

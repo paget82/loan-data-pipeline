@@ -6,9 +6,7 @@ with rates as (
 
 select
     valid_for,
-    country,
-    currency,
     currency_code,
-    czk_per_unit
+    rate_per_usd
 
 from rates

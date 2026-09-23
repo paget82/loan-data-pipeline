@@ -19,14 +19,17 @@ import numpy as np
 import pandas as pd
 from faker import Faker
 
-fake = Faker("cs_CZ")
-# Separate US-locale instance used only for the fields that mirror the
-# "bank_loan_data" reference dataset (US states, job titles), so the
-# output can populate a flat table compatible with that dataset's schema.
-fake_us = Faker("en_US")
+fake = Faker("en_US")
 Faker.seed(42)
 random.seed(42)
 np.random.seed(42)
+
+
+_uuid_rng = random.Random(42)
+
+
+def new_uuid() -> str:
+    return str(uuid.UUID(int=_uuid_rng.getrandbits(128), version=4))
 
 OUTPUT_DIR = Path(__file__).resolve().parent.parent / "data" / "raw"
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
@@ -59,18 +62,16 @@ def generate_clients(n: int) -> pd.DataFrame:
     for _ in range(n):
         rows.append(
             {
-                "client_id": str(uuid.uuid4()),
+                "client_id": new_uuid(),
                 "full_name": fake.name(),
                 "birth_date": fake.date_of_birth(minimum_age=18, maximum_age=75),
                 "city": fake.city(),
-                "monthly_income": round(np.random.lognormal(mean=10.0, sigma=0.4)),
+                "monthly_income": round(np.random.lognormal(mean=8.5, sigma=0.4)),
                 "credit_score": random.randint(300, 900),
                 "signup_date": fake.date_between(start_date="-5y", end_date="today"),
-                # Fields added to support a flat output table compatible
-                # with the "bank_loan_data" reference dataset schema
-                "address_state": fake_us.state_abbr(),
+                "address_state": fake.state_abbr(),
                 "emp_length": random.choice(EMP_LENGTHS),
-                "emp_title": fake_us.job(),
+                "emp_title": fake.job(),
                 "home_ownership": random.choices(
                     HOME_OWNERSHIP, weights=HOME_OWNERSHIP_WEIGHTS
                 )[0],
@@ -96,7 +97,7 @@ def generate_loans(n: int, client_ids: list[str]) -> pd.DataFrame:
         origination = fake.date_between(start_date="-4y", end_date="today")
         rows.append(
             {
-                "loan_id": str(uuid.uuid4()),
+                "loan_id": new_uuid(),
                 "client_id": random.choice(client_ids),
                 "principal_amount": round(np.random.lognormal(mean=9.5, sigma=0.6), 2),
                 "interest_rate": round(random.uniform(3.5, 24.9), 2),
@@ -105,8 +106,6 @@ def generate_loans(n: int, client_ids: list[str]) -> pd.DataFrame:
                 "status": random.choices(
                     LOAN_STATUSES, weights=[0.55, 0.25, 0.10, 0.10]
                 )[0],
-                # Fields added to support a flat output table compatible
-                # with the "bank_loan_data" reference dataset schema
                 "application_type": random.choices(
                     APPLICATION_TYPES, weights=APPLICATION_TYPE_WEIGHTS
                 )[0],
@@ -132,10 +131,11 @@ def generate_transactions(n: int, loan_ids: list[str]) -> pd.DataFrame:
         tx_date = fake.date_between(start_date="-4y", end_date="today")
         rows.append(
             {
-                "transaction_id": str(uuid.uuid4()),
+                "transaction_id": new_uuid(),
                 "loan_id": random.choice(loan_ids),
                 "transaction_date": tx_date,
-                "amount": round(abs(np.random.normal(loc=3500, scale=1200)), 2),
+                # USD transaction amount (typical monthly installment/fee size)
+                "amount": round(abs(np.random.normal(loc=350, scale=120)), 2),
                 "transaction_type": random.choices(
                     TRANSACTION_TYPES, weights=[0.70, 0.15, 0.10, 0.05]
                 )[0],

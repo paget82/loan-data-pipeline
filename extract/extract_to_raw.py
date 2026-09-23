@@ -49,9 +49,7 @@ def load_table(engine, table_name: str):
 
     df = pd.read_csv(csv_path)
 
-    # Explicitly drop the table with CASCADE so the run doesn't fail if
-    # dbt staging views from a previous pipeline run depend on it.
-    # (pandas to_sql(if_exists="replace") does a plain DROP TABLE without CASCADE.)
+
     with engine.begin() as conn:
         conn.execute(text(f"DROP TABLE IF EXISTS raw.{table_name} CASCADE;"))
 

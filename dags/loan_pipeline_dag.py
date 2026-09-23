@@ -3,9 +3,10 @@ DAG orchestrating the loan data pipeline.
 
 Runs the full batch flow daily:
   1a. generate_data          -> generates new synthetic CSV data
-  1b. extract_exchange_rates -> pulls the daily EUR/CZK rate from the
-                                 public CNB REST API (runs in parallel
-                                 with 1a/2, independent external source)
+  1b. extract_exchange_rates -> pulls the daily USD-based rates from the
+                                 public Frankfurter REST API (runs in
+                                 parallel with 1a/2, independent external
+                                 source)
   2.  extract_to_raw         -> loads the CSVs into the raw schema in PostgreSQL
   3.  dbt_deps               -> installs dbt package dependencies (dbt_utils)
   4.  dbt_run                -> builds the staging and mart models (dbt)
@@ -49,7 +50,7 @@ with DAG(
         bash_command=f"cd {PROJECT_DIR} && {VENV_PYTHON} extract/extract_to_raw.py",
     )
 
-    # Independent external REST API source (CNB exchange rates) -- does
+    # Independent external REST API source (Frankfurter exchange rates) -- does
     # not depend on generate_data, so it can run in parallel.
     extract_exchange_rates = BashOperator(
         task_id="extract_exchange_rates",

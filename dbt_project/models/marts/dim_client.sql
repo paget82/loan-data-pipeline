@@ -11,6 +11,7 @@ select
     date_part('year', age(current_date, birth_date))::int as age,
     city,
     monthly_income,
+    round((monthly_income * 12)::numeric, 2) as annual_income,
     credit_score,
     signup_date,
     address_state,
