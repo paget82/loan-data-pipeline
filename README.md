@@ -95,6 +95,19 @@ alongside the original USD amounts.
   <img src="screenshots/powerbi_dwh_tables.png" alt="Power BI - source tables" width="600">
 </p>
 
+<p align="center">
+  <img src="images/report_01.png" alt="Report" width="600">
+</p>
+
+<p align="center">
+  <img src="images/report_02.png" alt="Report" width="600">
+</p>
+
+<p align="center">
+  <img src="images/report_03.png" alt="Report" width="600">
+</p>
+
+
 
 ## How to run
 1. Install Python dependencies: `pip install -r requirements.txt`
