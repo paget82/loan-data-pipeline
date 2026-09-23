@@ -92,7 +92,7 @@ alongside the original USD amounts.
 </p>
 
 <p align="center">
-  <img src="screenshots/powerbi_dwh_tables.png" alt="Power BI - source tables" width="600">
+  <img src="screenshots/pbi_dwh_tables.png" alt="Power BI - source tables" width="600">
 </p>
 
 <p align="center">
