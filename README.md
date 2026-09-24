@@ -240,3 +240,34 @@ in the DAG is caught automatically on every commit — before it could ever
 reach the scheduled Airflow run in Phase 2. 
 
 
+## Future improvements
+
+This project intentionally stays scoped to a working end-to-end
+demonstration. In a real production setting, the following would be the
+next priorities:
+
+- **Incremental dbt models** – `fact_transactions` currently rebuilds as a
+  full table on every run; at production volume it would use
+  `materialized='incremental'` with an `is_incremental()` filter on
+  `transaction_date` instead of reprocessing the whole history each time.
+- **Slowly Changing Dimensions (SCD Type 2)** – `dim_client` and `dim_loan`
+  currently only hold the latest state. Tracking historical changes
+  (e.g. a client's credit score or a loan's status over time) would need
+  SCD Type 2 modeling, most likely via `dbt snapshot`.
+- **Cloud-native target** – the warehouse currently runs on a local
+  PostgreSQL instance for simplicity. A production deployment would target
+  a cloud data warehouse (e.g. BigQuery, Snowflake, or Redshift) with the
+  raw data landing in object storage (S3/GCS) first.
+- **Alerting on pipeline failure** – Airflow currently surfaces failures
+  only in its own UI. A production setup would add failure notifications
+  (Slack/email) on both DAG task failures and dbt test failures.
+- **Secrets management** – credentials are currently passed via a local
+  `.env` file. In production these would move to a managed secrets store
+  (e.g. AWS Secrets Manager, HashiCorp Vault) instead of environment files.
+- **Unit tests for the Python layer** – data quality is covered by dbt
+  tests, but the generator and extraction scripts (`generate_data.py`,
+  `extract_exchange_rates.py`) have no dedicated unit tests (e.g. verifying
+  the amortization formula, retry/backoff logic, or UUID determinism).
+- **dbt docs / lineage** – `dbt docs generate` would produce an interactive
+  lineage graph and column-level documentation, useful for onboarding and
+  impact analysis, and could be published via GitHub Pages.
