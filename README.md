@@ -263,6 +263,3 @@ next priorities:
   tests, but the generator and extraction scripts (`generate_data.py`,
   `extract_exchange_rates.py`) have no dedicated unit tests (e.g. verifying
   the amortization formula, retry/backoff logic, or UUID determinism).
-- **dbt docs / lineage** – `dbt docs generate` would produce an interactive
-  lineage graph and column-level documentation, useful for onboarding and
-  impact analysis, and could be published via GitHub Pages.
