@@ -198,11 +198,6 @@ by European Central Bank reference rates).
   as `dim_exchange_rate`, and used to convert `dim_loan.principal_amount`
   into `principal_amount_eur`
 
-The conversion uses a scalar subquery rather than a join, so a temporarily
-unavailable API (e.g. the Frankfurter service is down) never drops loan
-rows from `dim_loan` — it simply yields a null EUR amount for that run,
-and normal USD reporting is unaffected.
-
 In the Airflow DAG this runs as an independent `extract_exchange_rates`
 task in parallel with `extract_to_raw`, since it doesn't depend on the
 synthetic data generation step — both must finish before `dbt_deps` runs.
